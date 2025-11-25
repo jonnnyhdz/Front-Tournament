@@ -2,9 +2,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { getTournaments, registerPlayer } from "../services/api";
+import { getTournaments, registerPlayer, getParticipants, getMatches } from "../services/api";
 import BracketTree from "../components/BracketTree";
-import axios from "axios";
 import {
   FaArrowLeft,
   FaTrophy,
@@ -16,8 +15,6 @@ import {
   FaCheckCircle,
   FaTimesCircle,
 } from "react-icons/fa";
-
-const API_URL = "http://localhost:4000/api";
 
 export default function TournamentDetail() {
   const { id } = useParams();
@@ -33,7 +30,6 @@ export default function TournamentDetail() {
   const defaultImage =
     "https://framegames.es/wp-content/uploads/2023/08/web_torneo_sin_fondo-1.png";
 
-  //Cargar torneo, jugadores y matches
   useEffect(() => {
     const loadTournament = async () => {
       const data = await getTournaments();
@@ -41,31 +37,30 @@ export default function TournamentDetail() {
       setTournament(found);
     };
 
-    const fetchData = async () => {
+    const loadRelations = async () => {
       try {
-        const [resP, resM] = await Promise.all([
-          axios.get(`${API_URL}/tournaments/${id}/participants`),
-          axios.get(`${API_URL}/tournaments/${id}/matches`),
+        const [participantList, matchList] = await Promise.all([
+          getParticipants(id),
+          getMatches(id),
         ]);
-        setPlayers(resP.data.map((p) => p.name || "Jugador"));
-        setMatches(resM.data);
+
+        setPlayers(participantList.map((p) => p.name || "Jugador"));
+        setMatches(matchList);
       } catch (err) {
-        console.error("Error al obtener datos:", err);
+        console.error("Error al obtener participantes/matches:", err);
       }
     };
 
     loadTournament();
-    fetchData();
+    loadRelations();
   }, [id]);
 
-  /**
-   * 🔹 Control del formulario
-   */
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setErrorMsg("");
 
     if (!form.name.trim() || !form.email.trim()) {
@@ -83,14 +78,14 @@ export default function TournamentDetail() {
       const res = await registerPlayer(payload);
 
       if (res?.participant) {
-        // 🔒 Guardar registro en LocalStorage
         localStorage.setItem(`registered_${id}`, "true");
 
         setSubmitted(true);
         setPlayers((prev) => [...prev, form.name]);
+
         setTournament((prev) => ({
           ...prev,
-          registeredCount: (prev.registeredCount || 0) + 1,
+          registeredCount: (prev?.registeredCount || 0) + 1,
         }));
       } else if (res?.error) {
         setErrorMsg(res.error);
@@ -102,9 +97,6 @@ export default function TournamentDetail() {
     }
   };
 
-  /**
-   * 🔹 Lógica de visualización
-   */
   if (!tournament)
     return (
       <div className="text-center text-gray-400 mt-40">Cargando torneo...</div>
@@ -112,21 +104,19 @@ export default function TournamentDetail() {
 
   const isFull =
     tournament.registeredCount >= tournament.participants ||
-    ["en curso", "finalizado"].includes(tournament.status?.toLowerCase() || "");
+    ["en curso", "finalizado"].includes(
+      tournament.status?.toLowerCase() || ""
+    );
 
   const alreadyRegistered =
     typeof window !== "undefined" &&
     localStorage.getItem(`registered_${id}`) === "true";
 
-  const hasMatches = matches && matches.length > 0;
-  const hasPlayers = players && players.length > 1;
+  const hasMatches = matches.length > 0;
+  const hasPlayers = players.length > 1;
+
   const showBracket = isFull || hasMatches || hasPlayers;
-
-  // Antes ocultaba el form si había bracket
-  // const showForm = !isFull && !submitted && !alreadyRegistered && !showBracket;
-
-  // Ahora solamente se oculta si ya se registró
-  const showForm = !alreadyRegistered && !submitted;
+  const showForm = !alreadyRegistered && !submitted && !isFull;
 
   const imageSrc = tournament.image || tournament.imageUrl || defaultImage;
 
@@ -137,14 +127,12 @@ export default function TournamentDetail() {
       ? "text-red-400"
       : "text-green-400";
 
-  console.log("MATCHES EN DETAIL:", matches);
-
   return (
     <section className="relative bg-[#0b0014] text-gray-100 min-h-screen overflow-hidden py-24 px-6 md:px-10">
       <div className="absolute inset-0 bg-gradient-to-b from-[#0b0014] via-[#120022] to-[#0b0014] opacity-95"></div>
 
       <div className="relative max-w-7xl mx-auto">
-        {/* Botón volver */}
+        {/* Botón Volver */}
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-purple-400 hover:text-purple-300 transition mb-10"
@@ -154,197 +142,207 @@ export default function TournamentDetail() {
 
         {/* Layout principal */}
         {showForm ? (
-          /* SI NO ESTÁ REGISTRADO — MOSTRAR FORMULARIO */
-          <div className="flex flex-col lg:flex-row items-start gap-12">
-            {/* Imagen */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="relative w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-2xl border border-purple-700/30"
-            >
-              <img
-                src={imageSrc}
-                alt={tournament.name}
-                className="w-full h-[500px] object-cover brightness-90"
-              />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#1a002f]/95 via-[#250046]/90 to-[#0b0014]/95 backdrop-blur-md py-6 px-6">
-                <h1 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow-[0_0_25px_rgba(147,51,234,0.6)] uppercase">
+          <>
+            {/* SI NO ESTÁ REGISTRADO */}
+            <div className="flex flex-col lg:flex-row items-start gap-12">
+              {/* Imagen */}
+              <motion.div
+                initial={{ opacity: 0, x: -30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="relative w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-2xl border border-purple-700/30"
+              >
+                <img
+                  src={imageSrc}
+                  alt={tournament.name}
+                  className="w-full h-[500px] object-cover brightness-90"
+                />
+
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#1a002f]/95 via-[#250046]/90 to-[#0b0014]/95 backdrop-blur-md py-6 px-6">
+                  <h1 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow-[0_0_25px_rgba(147,51,234,0.6)] uppercase">
+                    {tournament.name}
+                  </h1>
+
+                  {tournament.game && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <FaGamepad className="text-purple-400" />
+                      <span className="text-purple-300 font-semibold uppercase text-sm tracking-widest">
+                        {tournament.game}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Info + Form */}
+              <motion.div
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="w-full lg:w-1/2"
+              >
+                <p className="text-gray-300 leading-relaxed text-lg mb-8">
+                  {tournament.description ||
+                    "Prepárate para una experiencia competitiva sin igual, donde solo los mejores llegarán a la cima."}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-8">
+                  <div className="flex items-center gap-2">
+                    <FaInfoCircle className="text-purple-400 text-lg" />
+                    <p>
+                      Estado:{" "}
+                      <span className={`font-semibold ${statusColor}`}>
+                        {tournament.status}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <FaUsers className="text-purple-400 text-lg" />
+                    <p>
+                      {tournament.registeredCount} / {tournament.participants}{" "}
+                      jugadores
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <FaTrophy className="text-purple-400 text-lg" />
+                    <p>Premio: {tournament.prize || "Por anunciar"}</p>
+                  </div>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                  <h2 className="text-2xl font-bold text-white mb-3">
+                    Inscríbete al Torneo
+                  </h2>
+
+                  <div className="flex items-center bg-[#120022]/80 border border-purple-500/20 rounded-lg px-4">
+                    <FaUser className="text-purple-400 mr-3" />
+                    <input
+                      type="text"
+                      name="name"
+                      placeholder="Tu nombre completo"
+                      value={form.name}
+                      onChange={handleChange}
+                      className="bg-transparent w-full py-2 text-gray-200 placeholder-gray-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center bg-[#120022]/80 border border-purple-500/20 rounded-lg px-4">
+                    <FaEnvelope className="text-purple-400 mr-3" />
+                    <input
+                      type="email"
+                      name="email"
+                      placeholder="Correo electrónico"
+                      value={form.email}
+                      onChange={handleChange}
+                      className="bg-transparent w-full py-2 text-gray-200 placeholder-gray-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {errorMsg && (
+                    <div className="flex items-center gap-2 text-red-400 mt-2">
+                      <FaTimesCircle /> <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    type="submit"
+                    className="mt-4 bg-purple-600 hover:bg-purple-700 transition-all text-white py-2 rounded-lg font-semibold shadow-lg hover:shadow-[0_0_20px_rgba(147,51,234,0.5)]"
+                  >
+                    Inscribirme
+                  </motion.button>
+                </form>
+
+                {submitted && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6 }}
+                    className="text-center text-green-400 font-semibold flex items-center justify-center gap-2 bg-[#120022]/60 py-6 rounded-lg border border-green-400/20 shadow-lg mt-6"
+                  >
+                    <FaCheckCircle className="text-xl text-green-300" />
+                    <span>¡Tu registro fue exitoso!</span>
+                  </motion.div>
+                )}
+              </motion.div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* YA REGISTRADO */}
+            <div className="flex flex-col lg:flex-row items-start gap-12">
+              {/* Imagen */}
+              <motion.div
+                initial={{ opacity: 0, x: -30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="relative w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-2xl border border-purple-700/30"
+              >
+                <img
+                  src={imageSrc}
+                  alt={tournament.name}
+                  className="w-full h-[500px] object-cover brightness-90"
+                />
+              </motion.div>
+
+              {/* Info */}
+              <motion.div
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6 }}
+                className="w-full lg:w-1/2 flex flex-col justify-center bg-gradient-to-r from-[#1a002f]/80 via-[#250046]/70 to-transparent rounded-2xl p-8 backdrop-blur-md border border-purple-700/30 shadow-lg"
+              >
+                <h1 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow-[0_0_25px_rgba(147,51,234,0.6)] uppercase mb-3">
                   {tournament.name}
                 </h1>
+
                 {tournament.game && (
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mb-4">
                     <FaGamepad className="text-purple-400" />
                     <span className="text-purple-300 font-semibold uppercase text-sm tracking-widest">
                       {tournament.game}
                     </span>
                   </div>
                 )}
-              </div>
-            </motion.div>
 
-            {/* Info + Formulario */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="w-full lg:w-1/2"
-            >
-              <p className="text-gray-300 leading-relaxed text-lg mb-8">
-                {tournament.description ||
-                  "Prepárate para una experiencia competitiva sin igual, donde solo los mejores llegarán a la cima."}
-              </p>
+                <p className="text-gray-300 mb-6">
+                  {tournament.description ||
+                    "Ya estás registrado. Aquí puedes ver la información completa del torneo y su bracket."}
+                </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-8">
-                <div className="flex items-center gap-2">
-                  <FaInfoCircle className="text-purple-400 text-lg" />
-                  <p>
-                    Estado:{" "}
-                    <span className={`font-semibold ${statusColor}`}>
-                      {tournament.status}
+                <div className="flex flex-wrap gap-6 text-sm">
+                  <div className="flex items-center gap-2">
+                    <FaInfoCircle className="text-purple-400 text-lg" />
+                    <span>
+                      Estado:{" "}
+                      <span className={`font-semibold ${statusColor}`}>
+                        {tournament.status}
+                      </span>
                     </span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FaUsers className="text-purple-400 text-lg" />
-                  <p>
-                    {tournament.registeredCount} / {tournament.participants}{" "}
-                    jugadores
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FaTrophy className="text-purple-400 text-lg" />
-                  <p>Premio: {tournament.prize || "Por anunciar"}</p>
-                </div>
-              </div>
-
-              {/* FORM */}
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <h2 className="text-2xl font-bold text-white mb-3">
-                  Inscríbete al Torneo
-                </h2>
-
-                <div className="flex items-center bg-[#120022]/80 border border-purple-500/20 rounded-lg px-4">
-                  <FaUser className="text-purple-400 mr-3" />
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Tu nombre completo"
-                    value={form.name}
-                    onChange={handleChange}
-                    className="bg-transparent w-full py-2 text-gray-200 placeholder-gray-500 focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center bg-[#120022]/80 border border-purple-500/20 rounded-lg px-4">
-                  <FaEnvelope className="text-purple-400 mr-3" />
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="Correo electrónico"
-                    value={form.email}
-                    onChange={handleChange}
-                    className="bg-transparent w-full py-2 text-gray-200 placeholder-gray-500 focus:outline-none"
-                  />
-                </div>
-
-                {errorMsg && (
-                  <div className="flex items-center gap-2 text-red-400 mt-2">
-                    <FaTimesCircle /> <span>{errorMsg}</span>
                   </div>
-                )}
 
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  type="submit"
-                  className="mt-4 bg-purple-600 hover:bg-purple-700 transition-all text-white py-2 rounded-lg font-semibold shadow-lg hover:shadow-[0_0_20px_rgba(147,51,234,0.5)]"
-                >
-                  Inscribirme
-                </motion.button>
-              </form>
-
-              {submitted && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  className="text-center text-green-400 font-semibold flex items-center justify-center gap-2 bg-[#120022]/60 py-6 rounded-lg border border-green-400/20 shadow-lg mt-6"
-                >
-                  <FaCheckCircle className="text-xl text-green-300" />
-                  <span>¡Tu registro fue exitoso!</span>
-                </motion.div>
-              )}
-            </motion.div>
-          </div>
-        ) : (
-          /* SI YA ESTÁ REGISTRADO — MOSTRAR SOLO INFO */
-          <div className="flex flex-col lg:flex-row items-start gap-12">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="relative w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-2xl border border-purple-700/30"
-            >
-              <img
-                src={imageSrc}
-                alt={tournament.name}
-                className="w-full h-[500px] object-cover brightness-90"
-              />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="w-full lg:w-1/2 flex flex-col justify-center bg-gradient-to-r from-[#1a002f]/80 via-[#250046]/70 to-transparent rounded-2xl p-8 backdrop-blur-md border border-purple-700/30 shadow-lg"
-            >
-              <h1 className="text-4xl md:text-5xl font-extrabold text-white drop-shadow-[0_0_25px_rgba(147,51,234,0.6)] uppercase mb-3">
-                {tournament.name}
-              </h1>
-
-              {tournament.game && (
-                <div className="flex items-center gap-2 mb-4">
-                  <FaGamepad className="text-purple-400" />
-                  <span className="text-purple-300 font-semibold uppercase text-sm tracking-widest">
-                    {tournament.game}
-                  </span>
-                </div>
-              )}
-
-              <p className="text-gray-300 mb-6">
-                {tournament.description ||
-                  "Ya estás registrado. Aquí puedes ver la información completa del torneo y su bracket."}
-              </p>
-
-              <div className="flex flex-wrap gap-6 text-sm">
-                <div className="flex items-center gap-2">
-                  <FaInfoCircle className="text-purple-400 text-lg" />
-                  <span>
-                    Estado:{" "}
-                    <span className={`font-semibold ${statusColor}`}>
-                      {tournament.status}
+                  <div className="flex items-center gap-2">
+                    <FaUsers className="text-purple-400 text-lg" />
+                    <span>
+                      {tournament.registeredCount} / {tournament.participants}{" "}
+                      jugadores
                     </span>
-                  </span>
-                </div>
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <FaUsers className="text-purple-400 text-lg" />
-                  <span>
-                    {tournament.registeredCount} / {tournament.participants}{" "}
-                    jugadores
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <FaTrophy className="text-purple-400 text-lg" />
+                    <span>Premio: {tournament.prize || "Por anunciar"}</span>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <FaTrophy className="text-purple-400 text-lg" />
-                  <span>Premio: {tournament.prize || "Por anunciar"}</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
+              </motion.div>
+            </div>
+          </>
         )}
 
-        {/* --- BRACKET --- */}
+        {/* BRACKET */}
         {showBracket && (
           <>
             <motion.div
@@ -363,6 +361,7 @@ export default function TournamentDetail() {
                 <span className="hidden sm:block text-gray-400">
                   Ver bracket del torneo
                 </span>
+
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -389,6 +388,7 @@ export default function TournamentDetail() {
               <h2 className="text-3xl font-bold text-center text-white mb-8">
                 Bracket del Torneo
               </h2>
+
               <div className="overflow-x-auto w-full">
                 <div className="flex justify-center">
                   <BracketTree

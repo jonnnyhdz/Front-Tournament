@@ -34,3 +34,31 @@ export async function registerPlayer(data) {
     throw error;
   }
 }
+
+/**
+ * Obtener participantes del torneo
+ */
+export async function getParticipants(tournamentId) {
+  try {
+    const res = await fetch(`${API_URL}/tournaments/${tournamentId}/participants`);
+    if (!res.ok) throw new Error("Error al obtener participantes");
+    return await res.json();
+  } catch (error) {
+    console.error("getParticipants:", error);
+    return [];
+  }
+}
+
+/**
+ * Obtener matches del torneo
+ */
+export async function getMatches(tournamentId) {
+  try {
+    const res = await fetch(`${API_URL}/tournaments/${tournamentId}/matches`);
+    if (!res.ok) throw new Error("Error al obtener matches");
+    return await res.json();
+  } catch (error) {
+    console.error("getMatches:", error);
+    return [];
+  }
+}
