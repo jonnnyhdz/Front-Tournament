@@ -11,7 +11,10 @@ const handleScrollToTournaments = () => {
 
 export default function HeroSection() {
   return (
-    <section className="relative bg-[#07050c] text-white overflow-hidden py-28 px-6 md:px-20">
+    <section
+      id="heroTorneos"
+      className="relative bg-[#07050c] text-white overflow-hidden py-28 px-6 md:px-20"
+    >
       <div className="absolute inset-0 bg-linear-to-br from-[#0a0015] via-[#100322] to-[#220a45] opacity-95"></div>
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

@@ -34,3 +34,18 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Font: Pixel (Press Start 2P) */
+.font-pixel {
+  font-family: "Press Start 2P", cursive;
+}
+
+/* Font: Medieval (Cinzel Decorative) */
+.font-medieval {
+  font-family: "Cinzel Decorative", serif;
+}
+
+/* Font: Cuerpo (Share Tech Mono) */
+.font-body {
+  font-family: "Share Tech Mono", monospace;
+}
