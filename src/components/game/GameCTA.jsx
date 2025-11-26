@@ -148,7 +148,7 @@ export default function GameCTA() {
               >
                 <iframe
                   className="w-full h-[280px] md:h-[360px]"
-                  src="https://www.youtube.com/embed/3rgwIp6D3ow?autoplay=1&enablejsapi=1"
+                  src="https://www.youtube.com/embed/VGZM0CPvBKY?autoplay=1&enablejsapi=1"
                   allow="autoplay; encrypted-media"
                   allowFullScreen
                   onEnded={handleVideoEnd}
